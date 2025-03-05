@@ -602,10 +602,6 @@
                 <div class="settings-group">
                     <div class="settings-title">Configurações da API WhatsApp</div>
                     <div class="input-group">
-                        <label for="apiUrl">URL da API</label>
-                        <input type="text" id="apiUrl" value="http://154.38.178.255:8081">
-                    </div>
-                    <div class="input-group">
                         <label for="apiKey">API Key</label>
                         <input type="text" id="apiKey" value="B6D711FCDE4D4FD5936544120E713976">
                     </div>
@@ -717,7 +713,6 @@
         const timerPhone = document.getElementById('timerPhone');
 
         // API configuration
-        const apiUrlInput = document.getElementById('apiUrl');
         const apiKeyInput = document.getElementById('apiKey');
         const instanceNameInput = document.getElementById('instanceName');
         const testConnectionBtn = document.getElementById('testConnectionBtn');
@@ -779,13 +774,11 @@
         let presets = JSON.parse(localStorage.getItem('timerPresets')) || [];
 
         // Load saved API configuration
-        const savedApiUrl = localStorage.getItem('apiUrl');
         const savedApiKey = localStorage.getItem('apiKey');
         const savedInstanceName = localStorage.getItem('instanceName');
         const savedDefaultPhone = localStorage.getItem('defaultPhone');
         const savedNotificationSound = localStorage.getItem('notificationSound');
 
-        if (savedApiUrl) apiUrlInput.value = savedApiUrl;
         if (savedApiKey) apiKeyInput.value = savedApiKey;
         if (savedInstanceName) instanceNameInput.value = savedInstanceName;
         if (savedDefaultPhone) {
@@ -839,24 +832,25 @@
         }
 
         async function sendWhatsAppMessage(phone, message) {
-            const apiUrl = apiUrlInput.value;
             const apiKey = apiKeyInput.value;
             const instanceName = instanceNameInput.value;
             
-            if (!phone || !message || !apiUrl || !apiKey || !instanceName) {
+            if (!phone || !message || !apiKey || !instanceName) {
                 showNotification('Configuração incompleta para enviar mensagem');
                 return false;
             }
             
             try {
-                const response = await fetch(`${apiUrl}/message/text?key=${apiKey}`, {
+                // Usando a rota de API local via proxy do Vercel
+                const response = await fetch('/api/whatsapp', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        id: instanceName,
-                        message: message,
+                        apiKey,
+                        instanceName,
+                        message,
                         number: phone
                     })
                 });
@@ -877,23 +871,21 @@
         }
 
         async function testApiConnection() {
-            const apiUrl = apiUrlInput.value;
             const apiKey = apiKeyInput.value;
             const instanceName = instanceNameInput.value;
             
-            if (!apiUrl || !apiKey || !instanceName) {
+            if (!apiKey || !instanceName) {
                 showNotification('Preencha todos os campos da API');
                 return;
             }
             
             try {
                 // Save API configuration to localStorage
-                localStorage.setItem('apiUrl', apiUrl);
                 localStorage.setItem('apiKey', apiKey);
                 localStorage.setItem('instanceName', instanceName);
                 
-                // Test connection by checking instance status
-                const response = await fetch(`${apiUrl}/instance/info?key=${apiKey}&id=${instanceName}`);
+                // Usando a rota de API local via proxy do Vercel
+                const response = await fetch(`/api/test-connection?apiKey=${apiKey}&instanceName=${instanceName}`);
                 const data = await response.json();
                 
                 if (data.success) {
