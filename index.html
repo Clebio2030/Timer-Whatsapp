@@ -744,10 +744,50 @@
         const defaultPhoneInput = document.getElementById('defaultPhone');
         const notificationSoundInput = document.getElementById('notificationSound');
 
-        // Audio elements for notifications
-        const bellSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
-        const digitalSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-classic-alarm-995.mp3');
-        const gentleSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-bell-notification-933.mp3');
+        // Sons de notificação com inicialização segura
+        let bellSound = null;
+        let digitalSound = null; 
+        let gentleSound = null;
+
+        // Função para carregar sons de forma segura
+        function loadSounds() {
+            try {
+                // Carregar os sons com tratamento de erros
+                bellSound = new Audio();
+                digitalSound = new Audio();
+                gentleSound = new Audio();
+                
+                // Eventos para detectar falhas de carregamento
+                bellSound.addEventListener('error', (e) => {
+                    console.warn('Error loading bell sound:', e);
+                    bellSound = null;
+                });
+                
+                digitalSound.addEventListener('error', (e) => {
+                    console.warn('Error loading digital sound:', e);
+                    digitalSound = null;
+                });
+                
+                gentleSound.addEventListener('error', (e) => {
+                    console.warn('Error loading gentle sound:', e);
+                    gentleSound = null;
+                });
+                
+                // Definir as fontes
+                bellSound.src = 'https://assets.mixkit.co/sfx/preview/mixkit-bell-notification-933.mp3';
+                digitalSound.src = 'https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3';
+                gentleSound.src = 'https://assets.mixkit.co/sfx/preview/mixkit-classic-alarm-995.mp3';
+                
+                // Pré-carregar os sons
+                bellSound.load();
+                digitalSound.load();
+                gentleSound.load();
+                
+                console.log('Audio files loaded successfully');
+            } catch (err) {
+                console.warn('Failed to initialize notification sounds:', err);
+            }
+        }
 
         // Timer state
         let timerInterval = null;
@@ -818,12 +858,30 @@
             notification.textContent = message;
             notification.classList.add('show');
             
-            // Play notification sound if enabled
-            const soundType = notificationSoundInput.value;
-            if (soundType !== 'none') {
-                if (soundType === 'bell') bellSound.play();
-                else if (soundType === 'digital') digitalSound.play();
-                else if (soundType === 'gentle') gentleSound.play();
+            try {
+                // Tentar tocar o som de notificação
+                const soundType = notificationSoundInput.value;
+                if (soundType !== 'none') {
+                    let sound = null;
+                    
+                    if (soundType === 'bell' && bellSound) sound = bellSound;
+                    else if (soundType === 'digital' && digitalSound) sound = digitalSound;
+                    else if (soundType === 'gentle' && gentleSound) sound = gentleSound;
+                    
+                    if (sound) {
+                        // Verificar se o som está pronto para ser tocado
+                        if (sound.readyState >= 2) { // HAVE_CURRENT_DATA (2) ou maior
+                            // Usar Promise.catch para lidar com erros de reprodução
+                            sound.play().catch(err => {
+                                console.warn('Could not play notification sound:', err);
+                            });
+                        } else {
+                            console.warn('Sound not ready to play yet');
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Error playing notification sound:', err);
             }
             
             setTimeout(() => {
@@ -841,6 +899,8 @@
             }
             
             try {
+                showNotification('Enviando mensagem...');
+                
                 // Usando a rota de API local via proxy do Vercel
                 const response = await fetch('/api/whatsapp', {
                     method: 'POST',
@@ -856,16 +916,19 @@
                 });
                 
                 const data = await response.json();
+                console.log('Send message response:', data);
+                
                 if (data.success) {
                     showNotification('Mensagem enviada com sucesso!');
                     return true;
                 } else {
-                    showNotification('Erro ao enviar mensagem');
+                    const errorMessage = data.error || data.details || 'Erro ao enviar mensagem';
+                    showNotification(`Erro: ${errorMessage}`);
                     return false;
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
-                showNotification('Erro ao enviar mensagem');
+                showNotification('Erro ao enviar mensagem. Verifique o console para detalhes.');
                 return false;
             }
         }
@@ -884,9 +947,15 @@
                 localStorage.setItem('apiKey', apiKey);
                 localStorage.setItem('instanceName', instanceName);
                 
+                // Mostrar indicador de carregamento
+                apiStatus.classList.remove('connected');
+                statusText.textContent = 'Conectando...';
+                
                 // Usando a rota de API local via proxy do Vercel
-                const response = await fetch(`/api/test-connection?apiKey=${apiKey}&instanceName=${instanceName}`);
+                const response = await fetch(`/api/test-connection?apiKey=${encodeURIComponent(apiKey)}&instanceName=${encodeURIComponent(instanceName)}`);
                 const data = await response.json();
+                
+                console.log('API test response:', data);
                 
                 if (data.success) {
                     apiStatus.classList.add('connected');
@@ -895,13 +964,14 @@
                 } else {
                     apiStatus.classList.remove('connected');
                     statusText.textContent = 'Desconectado';
-                    showNotification('Falha na conexão. Verifique os dados.');
+                    const errorMessage = data.error || data.details || 'Falha na conexão. Verifique os dados.';
+                    showNotification(`Erro: ${errorMessage}`);
                 }
             } catch (error) {
                 console.error('Error testing connection:', error);
                 apiStatus.classList.remove('connected');
                 statusText.textContent = 'Desconectado';
-                showNotification('Erro ao testar conexão');
+                showNotification('Erro ao testar conexão. Verifique o console para detalhes.');
             }
         }
 
@@ -1306,6 +1376,9 @@
                 });
             });
         }
+
+        // Load sounds when DOM is ready
+        document.addEventListener('DOMContentLoaded', loadSounds);
 
         // Render initial presets
         renderPresets();
